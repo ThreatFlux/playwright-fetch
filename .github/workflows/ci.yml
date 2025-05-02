@@ -29,18 +29,17 @@ jobs:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
     
-    - name: Install dependencies
-      run: |
-        uv pip install -e ".[dev]"
+    - name: Set up development environment
+      run: make dev-setup
     
     - name: Check formatting with ruff
-      run: uv run ruff format --line-length 120 --check src tests
+      run: make format
       
     - name: Lint with ruff
-      run: uv run ruff check --line-length 120 src tests
+      run: make ruff
       
     - name: Type check with mypy
-      run: uv run mypy --config-file=mypy.ini src/mcp_server_fetch
+      run: make mypy
       
   security:
     runs-on: ubuntu-latest
@@ -61,15 +60,11 @@ jobs:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
     
-    - name: Install dependencies
-      run: |
-        uv pip install -e ".[dev]"
+    - name: Set up development environment
+      run: make dev-setup
     
-    - name: Security check with bandit
-      run: uv run bandit -r src/mcp_server_fetch -c bandit.yaml
-      
-    - name: Dependency vulnerability check with safety
-      run: uv run safety check
+    - name: Run security checks
+      run: make security-check
 
   test:
     runs-on: ubuntu-latest
@@ -90,17 +85,15 @@ jobs:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
     
-    - name: Install dependencies
-      run: |
-        uv pip install -e ".[dev]"
+    - name: Set up development environment
+      run: make dev-setup
         
     - name: Install Playwright dependencies
       run: |
         uv run playwright install --with-deps chromium
       
-    - name: Test with pytest
-      run: |
-        uv run pytest --cov=src/mcp_server_fetch --cov-report=term --cov-report=xml tests/
+    - name: Generate test coverage
+      run: make coverage
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -125,20 +118,17 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
         
-    - name: Extract version
+    - name: Get version
       id: version
       run: |
-        VERSION=$(grep -E "__version__ = \"[0-9]+\.[0-9]+\.[0-9]+\"" src/mcp_server_fetch/__init__.py | cut -d'"' -f2)
+        VERSION=$(make -s get-version | grep "Current version:" | cut -d' ' -f3)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
     
     - name: Build and push Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        target: final
-        tags: |
-          threatflux/playwright-fetch:latest
-          threatflux/playwright-fetch:${{ steps.version.outputs.version }}
-        cache-from: type=registry,ref=threatflux/playwright-fetch:buildcache
-        cache-to: type=registry,ref=threatflux/playwright-fetch:buildcache,mode=max
+      run: |
+        make docker-build
+        docker push threatflux/playwright-fetch:latest
+        docker push threatflux/playwright-fetch:${{ steps.version.outputs.version }}
+    
+    - name: Test Docker image
+      run: make docker-test

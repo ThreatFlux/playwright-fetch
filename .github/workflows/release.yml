@@ -15,13 +15,24 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
       
       - name: Verify version matches
         run: |
-          CODE_VERSION=$(grep -E "__version__ = \"[0-9]+\.[0-9]+\.[0-9]+\"" src/mcp_server_fetch/__init__.py | cut -d'"' -f2)
+          make -s get-version
+          CODE_VERSION=$(make -s get-version | grep "Current version:" | cut -d' ' -f3)
           TAG_VERSION=${{ steps.version.outputs.version }}
           
           if [ "$CODE_VERSION" != "$TAG_VERSION" ]; then
@@ -49,17 +60,20 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       
-      - name: Install dependencies
+      - name: Set up development environment
+        run: make dev-setup
+      
+      - name: Install Playwright dependencies
         run: |
-          uv pip install -e ".[dev]"
           uv run playwright install --with-deps chromium
       
-      - name: Lint and test
+      - name: Run linting and type checks
         run: |
-          uv run ruff check --line-length 120 src tests
-          uv run mypy --config-file=mypy.ini src/mcp_server_fetch
-          uv run bandit -r src/mcp_server_fetch -c bandit.yaml
-          uv run pytest --cov=src/mcp_server_fetch tests/
+          make lint
+          make security-check
+      
+      - name: Run tests with coverage
+        run: make coverage
       
       - name: Check coverage thresholds
         run: |
@@ -85,13 +99,11 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       
-      - name: Install dependencies
-        run: |
-          uv pip install -e ".[dev]"
-          uv pip install build twine
+      - name: Set up development environment
+        run: make dev-setup
       
       - name: Build package
-        run: uv run python -m build
+        run: make build
       
       - name: Check distribution
         run: uv run twine check dist/*
@@ -125,26 +137,27 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
       
-      - name: Build and push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          target: final
-          tags: |
-            threatflux/playwright-fetch:latest
-            threatflux/playwright-fetch:${{ needs.validate.outputs.version }}
-          labels: |
-            org.opencontainers.image.title=Playwright Fetch MCP Server
-            org.opencontainers.image.description=A Model Context Protocol server for fetching web content using Playwright
-            org.opencontainers.image.vendor=ThreatFlux
-            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
-            org.opencontainers.image.licenses=MIT
-            org.opencontainers.image.source=https://github.com/threatflux/playwright-fetch
-          cache-from: type=registry,ref=threatflux/playwright-fetch:buildcache
-          cache-to: type=registry,ref=threatflux/playwright-fetch:buildcache,mode=max
-      
-      - name: Verify Docker image works
+      - name: Build Docker image
+        run: make docker-build
+        
+      - name: Push Docker images
         run: |
-          docker pull threatflux/playwright-fetch:${{ needs.validate.outputs.version }}
-          docker run --rm threatflux/playwright-fetch:${{ needs.validate.outputs.version }} --help
+          docker tag threatflux/playwright-fetch:latest threatflux/playwright-fetch:${{ needs.validate.outputs.version }}
+          
+          # Add image labels
+          docker buildx imagetools create \
+            --tag threatflux/playwright-fetch:latest \
+            --tag threatflux/playwright-fetch:${{ needs.validate.outputs.version }} \
+            --label "org.opencontainers.image.title=Playwright Fetch MCP Server" \
+            --label "org.opencontainers.image.description=A Model Context Protocol server for fetching web content using Playwright" \
+            --label "org.opencontainers.image.vendor=ThreatFlux" \
+            --label "org.opencontainers.image.version=${{ needs.validate.outputs.version }}" \
+            --label "org.opencontainers.image.licenses=MIT" \
+            --label "org.opencontainers.image.source=https://github.com/ThreatFlux/playwright-fetch" \
+            threatflux/playwright-fetch:latest
+          
+          docker push threatflux/playwright-fetch:latest
+          docker push threatflux/playwright-fetch:${{ needs.validate.outputs.version }}
+      
+      - name: Test Docker image
+        run: make docker-test

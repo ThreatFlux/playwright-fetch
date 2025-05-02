@@ -1,0 +1,59 @@
+# Ruff configuration for the project
+# https://docs.astral.sh/ruff/
+
+# Target Python version
+target-version = "py313"
+
+# Line length
+line-length = 120
+
+[lint]
+# Enable specific rules
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "C",   # mccabe complexity
+    "B",   # flake8-bugbear
+    "S",   # bandit
+    "N",   # pep8-naming
+    "COM", # flake8-commas
+    "PIE", # flake8-pie
+    "TRY", # tryceratops
+    "RUF", # ruff specific rules
+]
+
+# Ignore specific rules
+ignore = [
+    "E203",  # Whitespace before ':'
+    "E501",  # Line too long (handled by formatter)
+    "C901",  # Function is too complex (we handle this differently)
+    "N818",  # Exception name should be named with an Error suffix
+    "TRY300", # Consider moving this statement to an `else` block
+    "TRY401", # Redundant exception object included in logging exception call
+    "B904",   # Use 'raise from' for exception chaining
+]
+
+# Allow unused variables when they start with an underscore
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.isort]
+known-first-party = ["mcp_server_fetch"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[lint.mccabe]
+# Maximum McCabe complexity permitted (10 is recommended)
+max-complexity = 10
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]  # Unused import, wildcard import
+"tests/*" = ["S101", "S105", "S106", "S107", "F401"]  # Assert/secret usage allowed in tests and unused imports
+
+[format]
+# Like Black, use double quotes for strings
+quote-style = "double"
+# Like Black, wrap lines in parentheses and not brackets by default
+indent-style = "space"
+# Always include trailing commas
+skip-magic-trailing-comma = false

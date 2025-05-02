@@ -1,0 +1,10 @@
+### Bandit config file
+
+# This file is used to control how Bandit performs security tests
+
+# Tests to skip
+skips: ['B101']
+
+# Security level for tests to pass
+# low, medium, high
+profile: high

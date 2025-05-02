@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Verify version matches
+        run: |
+          CODE_VERSION=$(grep -E "__version__ = \"[0-9]+\.[0-9]+\.[0-9]+\"" src/mcp_server_fetch/__init__.py | cut -d'"' -f2)
+          TAG_VERSION=${{ steps.version.outputs.version }}
+          
+          if [ "$CODE_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version mismatch! Tag version ($TAG_VERSION) does not match code version ($CODE_VERSION)"
+            exit 1
+          fi
+          
+          echo "Versions match: $CODE_VERSION"
+
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv pip install -e ".[dev]"
+          uv run playwright install --with-deps chromium
+      
+      - name: Lint and test
+        run: |
+          uv run ruff check --line-length 120 src tests
+          uv run mypy --config-file=mypy.ini src/mcp_server_fetch
+          uv run bandit -r src/mcp_server_fetch -c bandit.yaml
+          uv run pytest --cov=src/mcp_server_fetch tests/
+      
+      - name: Check coverage thresholds
+        run: |
+          uv run coverage report --fail-under=90
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: [validate, test]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Install dependencies
+        run: |
+          uv pip install -e ".[dev]"
+          uv pip install build twine
+      
+      - name: Build package
+        run: uv run python -m build
+      
+      - name: Check distribution
+        run: uv run twine check dist/*
+      
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ needs.validate.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*
+            LICENSE
+            README.md
+      
+  docker-release:
+    runs-on: ubuntu-latest
+    needs: [validate, create-release]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          target: final
+          tags: |
+            threatflux/playwright-fetch:latest
+            threatflux/playwright-fetch:${{ needs.validate.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=Playwright Fetch MCP Server
+            org.opencontainers.image.description=A Model Context Protocol server for fetching web content using Playwright
+            org.opencontainers.image.vendor=ThreatFlux
+            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=https://github.com/threatflux/playwright-fetch
+          cache-from: type=registry,ref=threatflux/playwright-fetch:buildcache
+          cache-to: type=registry,ref=threatflux/playwright-fetch:buildcache,mode=max
+      
+      - name: Verify Docker image works
+        run: |
+          docker pull threatflux/playwright-fetch:${{ needs.validate.outputs.version }}
+          docker run --rm threatflux/playwright-fetch:${{ needs.validate.outputs.version }} --help

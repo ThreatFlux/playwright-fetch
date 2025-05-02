@@ -3,7 +3,7 @@
     "servers": {
       "playwright-fetch": {
         "command": "docker",
-        "args": ["run", "-i", "--rm", "mcp/playwright-fetch"]
+        "args": ["run", "-i", "--rm", "threatflux/playwright-fetch"]
       }
     }
   }

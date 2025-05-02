@@ -23,6 +23,7 @@ Created by [Wyatt Roersma](https://github.com/wyroersma) with assistance from Cl
 - **Pagination Support**: Handles large content through pagination
 - **Robots.txt Compliance**: Respects robots.txt directives for autonomous fetching
 - **Proxy Support**: Allows routing requests through a proxy server
+- **Docker Ready**: Available as pre-built Docker images via [Docker Hub](https://hub.docker.com/r/threatflux/playwright-fetch) and [GitHub Container Registry](https://github.com/threatflux/playwright-fetch/pkgs/container/playwright-fetch)
 
 ## Available Tools
 
@@ -68,8 +69,20 @@ uv pip exec playwright install
 
 ### 2. Using Docker
 
+You can use our pre-built Docker images from Docker Hub or GitHub Container Registry:
+
 ```bash
-docker build -t mcp/playwright-fetch .
+# From Docker Hub
+docker pull threatflux/playwright-fetch:latest
+
+# From GitHub Container Registry
+docker pull ghcr.io/threatflux/playwright-fetch:latest
+```
+
+Or build it yourself:
+
+```bash
+docker build -t threatflux/playwright-fetch .
 ```
 
 ## Configuration
@@ -98,7 +111,7 @@ Add to your Claude settings:
 "mcpServers": {
   "playwright-fetch": {
     "command": "docker",
-    "args": ["run", "-i", "--rm", "mcp/playwright-fetch"]
+    "args": ["run", "-i", "--rm", "threatflux/playwright-fetch"]
   }
 }
 ```
@@ -134,7 +147,7 @@ For manual installation, add the following JSON block to your User Settings (JSO
     "servers": {
       "playwright-fetch": {
         "command": "docker",
-        "args": ["run", "-i", "--rm", "mcp/playwright-fetch"]
+        "args": ["run", "-i", "--rm", "threatflux/playwright-fetch"]
       }
     }
   }

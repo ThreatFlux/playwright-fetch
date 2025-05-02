@@ -1,0 +1,77 @@
+name: Automatic Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without v prefix)'
+        required: true
+        type: string
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      tag_exists: ${{ steps.check-tag.outputs.exists }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag or input
+        id: get-version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # From tag
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # From workflow_dispatch input
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check-tag
+        run: |
+          if git rev-parse "v${{ steps.get-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create tag if missing
+        if: steps.check-tag.outputs.exists != 'true' && github.event_name == 'workflow_dispatch'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          VERSION=${{ steps.get-version.outputs.version }}
+          
+          # Update version in files
+          sed -i "s/__version__ = \"[0-9]*\.[0-9]*\.[0-9]*\"/__version__ = \"$VERSION\"/" src/mcp_server_fetch/__init__.py
+          sed -i "/^\\[project\\]/,/^\\[\\]/ s/^version = \"[0-9]*\\.[0-9]*\\.[0-9]*\"/version = \"$VERSION\"/" pyproject.toml
+          
+          # Commit and tag
+          git add pyproject.toml src/mcp_server_fetch/__init__.py
+          git commit -m "chore: prepare release $VERSION"
+          git tag -a "v$VERSION" -m "Version $VERSION"
+          git push
+          git push --tags
+
+  create-release:
+    needs: prepare-release
+    uses: ./.github/workflows/release.yml
+
+  notify:
+    needs: [prepare-release, create-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify success
+        run: |
+          echo "Version v${{ needs.prepare-release.outputs.version }} has been successfully released!"
+          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.prepare-release.outputs.version }}"
+          echo "Container Image: ghcr.io/${{ github.repository_owner }}/playwright-fetch:${{ needs.prepare-release.outputs.version }}"

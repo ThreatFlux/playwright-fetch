@@ -105,6 +105,8 @@ jobs:
     needs: [lint-and-type-check, security, test]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
@@ -117,6 +119,13 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Get version
       id: version
@@ -124,11 +133,23 @@ jobs:
         VERSION=$(make -s get-version | grep "Current version:" | cut -d' ' -f3)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
     
-    - name: Build and push Docker image
+    - name: Build Docker image
+      run: make docker-build
+    
+    - name: Tag for GitHub Container Registry
       run: |
-        make docker-build
+        docker tag threatflux/playwright-fetch:latest ghcr.io/threatflux/playwright-fetch:latest
+        docker tag threatflux/playwright-fetch:${{ steps.version.outputs.version }} ghcr.io/threatflux/playwright-fetch:${{ steps.version.outputs.version }}
+    
+    - name: Push to DockerHub
+      run: |
         docker push threatflux/playwright-fetch:latest
         docker push threatflux/playwright-fetch:${{ steps.version.outputs.version }}
+    
+    - name: Push to GitHub Container Registry
+      run: |
+        docker push ghcr.io/threatflux/playwright-fetch:latest
+        docker push ghcr.io/threatflux/playwright-fetch:${{ steps.version.outputs.version }}
     
     - name: Test Docker image
       run: make docker-test

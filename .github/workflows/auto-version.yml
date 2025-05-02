@@ -1,0 +1,68 @@
+name: Auto Version Update
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/**'
+  workflow_dispatch:
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'chore: bump version')"
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.13'
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Set up development environment
+        run: make dev-setup
+      
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      
+      - name: Get current version
+        id: current_version
+        run: |
+          VERSION=$(make -s get-version | grep "Current version:" | cut -d' ' -f3)
+          echo "current=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Bump version
+        run: make bump-version
+      
+      - name: Get new version
+        id: new_version
+        run: |
+          VERSION=$(make -s get-version | grep "Current version:" | cut -d' ' -f3)
+          echo "new=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Commit version bump
+        run: |
+          git add pyproject.toml src/mcp_server_fetch/__init__.py
+          git commit -m "chore: bump version to ${{ steps.new_version.outputs.new }}"
+      
+      - name: Create tag
+        run: |
+          git tag -a "v${{ steps.new_version.outputs.new }}" -m "Version ${{ steps.new_version.outputs.new }}"
+      
+      - name: Push changes
+        run: |
+          git push
+          git push --tags

@@ -165,7 +165,7 @@ security-check:
 	$(UV) pip install bandit safety
 	$(UV) run bandit -r src/mcp_server_fetch --quiet --format json --output security-report.json
 	$(UV) run bandit -r src/mcp_server_fetch
-	$(UV) run safety check --full-report --output json --output-file safety-report.json
+	$(UV) run safety check --output json > safety-report.json
 	$(UV) run safety check --full-report
 	@echo "Security checks complete. Reports saved as security-report.json and safety-report.json"
 

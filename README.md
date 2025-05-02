@@ -11,6 +11,10 @@
 
 A Model Context Protocol server that provides web content fetching capabilities using Playwright for browser automation. This server enables LLMs to retrieve and process JavaScript-rendered content from web pages, converting HTML to markdown for easier consumption.
 
+<a href="https://glama.ai/mcp/servers/@ThreatFlux/playwright-fetch">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@ThreatFlux/playwright-fetch/badge" alt="Playwright Fetch Server MCP server" />
+</a>
+
 ## Author
 
 Created by [Wyatt Roersma](https://github.com/wyroersma) with assistance from Claude Code.

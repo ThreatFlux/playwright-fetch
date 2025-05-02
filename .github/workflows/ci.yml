@@ -94,12 +94,12 @@ jobs:
       
     - name: Generate test coverage
       run: make coverage
-    
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@ad3126e916f78f00edff4ed0317cf185271ccc2d  # v5.4.2
       with:
-        file: ./coverage.xml
-        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: ThreatFlux/playwright-fetch
 
   docker:
     needs: [lint-and-type-check, security, test]

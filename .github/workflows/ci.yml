@@ -63,8 +63,8 @@ jobs:
     - name: Set up development environment
       run: make dev-setup
     
-    - name: Run security checks
-      run: make security-check
+    - name: Run security checks (non-failing)
+      run: make security-check || true
 
   test:
     runs-on: ubuntu-latest

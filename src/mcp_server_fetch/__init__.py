@@ -5,7 +5,7 @@ import asyncio
 
 from .server import serve
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def main():
